@@ -1,0 +1,28 @@
+﻿1.将topo4.py之外的所有文件均拷贝到ryu/ryu/app目录下
+2.将topo4.py拷贝到mininet/custom目录下
+3.在mininet/custom目录下执行：
+mn --custom topo4.py  --topo mytopo --mac --switch ovsk,protocols=OPENFLOW1.3   --controller=remote
+4.在ryu/ryu/app目录下执行：
+ryu-manager --verbose --observe-links simple_switch.py  rest_topology.py ofctl_rest.py
+此时最好在mininet中pingall一下，保证simple_switch.py完全收集到网络拓扑
+5.在ryu/ryu/app目录下执行：
+python TopoMain.py
+python network_monitor.py （调用别人写的计算链路cureentCapacity的算法，是基于openflow1.3的，所以3中建立拓扑时必须使用openflow1.3协议）
+（将__MC_ICC16_Alg1.py所需的信息写出输入文件）
+6.然后在ryu/ryu/app目录下执行：
+python prepareforRyuApp.py
+（调用__MC_ICC16_Alg1.py算法，生成策略及中间文件供ryuapp调用）
+7.此时需要终止simple_switch及mininet的运行：
+直接使用ctrl+c终止
+8.在mininet/custom目录下执行：
+mn --custom topo4.py  --topo mytopo --mac --switch ovsk  --controller=remote
+生成和3中相同的拓扑，但是必须使用openflow1.0协议，因为app是基于openflow1.0编写的
+9.在ryu/ryu/app目录下执行我们的app：
+ryu-manager simpleswitch1ofAlg1.py
+
+
+
+存在的问题：
+1.步骤9运行后，在mininet中ping时ping不通，虽然通过查看流表，流表中存在相应的流表项
+2.上述3和8要运行不同的openflow协议的原因是步骤5中运行的network_monitor.py 使用的协议版本和步骤9中app的版本不一致。解决办法是：修改9中的app，使其支持openflow1.3。已经尝试更改过了（文件名是simpleswitch3ofAlg1.py），但是不报错也不能运行，卡在了那里，需要调试一下。
+3.使其自动运行的shell脚本和定时任务需要在上面所有的工作完成后选择一个合适的定时值

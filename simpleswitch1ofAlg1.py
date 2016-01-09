@@ -8,7 +8,7 @@ from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER
 
 from ryu.controller.handler import set_ev_cls
 
-from ryu.ofproto import ofproto_v1_3
+from ryu.ofproto import ofproto_v1_0
 
 from ryu.lib.packet import packet
 
@@ -32,7 +32,7 @@ ARP = arp.arp.__name__
 
 class simpleswitchofAlg1(app_manager.RyuApp):
 
-    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
+    OFP_VERSIONS = [ofproto_v1_0.OFP_VERSION]
 
  
 
@@ -124,13 +124,12 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
         parser = datapath.ofproto_parser      
 
-        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS,actions)]
+ 
 
         #mod = parser.OFPFlowMod(datapath=datapath, match=match, cookie=0,command=ofproto.OFPFC_ADD, idle_timeout=30,          #hard_timeout=120,priority=ofproto.OFP_DEFAULT_PRIORITY,flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
 
         #mod = parser.OFPFlowMod(datapath=datapath, match=match, cookie=0,command=ofproto.OFPFC_ADD, idle_timeout=time,          hard_timeout=time,priority=priority,flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
-        #mod = parser.OFPFlowMod(datapath=datapath, match=match, cookie=0,command=ofproto.OFPFC_ADD, idle_timeout=time,          priority=priority,flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
-	mod = parser.OFPFlowMod(datapath=datapath, match=match,command=ofproto.OFPFC_ADD, idle_timeout=time,          priority=priority,flags=ofproto.OFPFF_SEND_FLOW_REM, instructions=inst)
+        mod = parser.OFPFlowMod(datapath=datapath, match=match, cookie=0,command=ofproto.OFPFC_ADD, idle_timeout=time,          priority=priority,flags=ofproto.OFPFF_SEND_FLOW_REM, actions=actions)
 
         datapath.send_msg(mod)
 
@@ -209,7 +208,7 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
                 self.Log_debug.write("ARP_PROXY_13"+"\n")
 
-                return Noneo7y
+                return None
 
             else:
 
@@ -287,9 +286,7 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
                   actions = [parser.OFPActionOutput(int(out_port))]
 
-                 # match = datapath.ofproto_parser.OFPMatch( in_port=in_port, dl_src=haddr_to_bin(src), dl_dst=haddr_to_bin(dst))
-                  match = datapath.ofproto_parser.OFPMatch( in_port=in_port, eth_src=src, eth_dst=dst)
-
+                  match = datapath.ofproto_parser.OFPMatch( in_port=in_port, dl_src=haddr_to_bin(src), dl_dst=haddr_to_bin(dst))
 
                   self.add_flow(datapath, int(10),match,3600, actions)
 
@@ -317,7 +314,7 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
                   actions = [parser.OFPActionOutput(out_port)]
 
-                  match = datapath.ofproto_parser.OFPMatch( in_port=in_port, eth_dst=dst)
+                  match = datapath.ofproto_parser.OFPMatch( in_port=in_port, dl_dst=haddr_to_bin(dst))
 
                   self.add_flow(datapath, int(1),match,1,actions)
 
@@ -347,7 +344,7 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
               actions = [parser.OFPActionOutput(out_port)]
 
-              match = datapath.ofproto_parser.OFPMatch( in_port=in_port, eth_dst=dst)
+              match = datapath.ofproto_parser.OFPMatch( in_port=in_port, dl_dst=haddr_to_bin(dst))
 
               self.add_flow(datapath, int(1),match,1,actions)
 
@@ -566,13 +563,5 @@ class simpleswitchofAlg1(app_manager.RyuApp):
 
 
             self.logger.info("Illeagal port state %s %s", port_no, reason)
-    
-    @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
-    def switch_features_handler(self,ev):
-        datapath = ev.msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        match = parser.OFPMatch()
-	actions = [parser.OFPActionOutPut(ofproto.OFPP_CONTROLLER,ofproto.OFPCML_NO_BUFFER)]
-	self.add_flow(datapath,int(0),match,5,actions)
+
       
