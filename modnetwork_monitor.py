@@ -173,6 +173,7 @@ class Network_Monitor(app_manager.RyuApp):
                  str3 = "Node_u"+"\t"+key[0]+"\t"+"-Node_v"+"\t"+key[1]+"\t"+"-Cap"+"\t"+str(val)+"\n"
                  f3.write(str3)
             f3.close()    
+            print  "_Cap_links file create complete\n"
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
