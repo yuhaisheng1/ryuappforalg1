@@ -6,8 +6,8 @@ Created on 2015-12-21
 '''
 
 from Topoinfo import Ryuinfo
-import __MC_ICC16_Alg1
+
 
 if __name__ == '__main__':
      ryuinfo = Ryuinfo()           
-     print "complete\n"
+     print "_Cap_MBoxes&&_PathSet&&_TrafficDemands file create complete\n"

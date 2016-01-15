@@ -1,4 +1,4 @@
-#coding=utf-8
+﻿#coding=utf-8
 '''
 Created on 2015-12-20
 
@@ -34,7 +34,7 @@ class Ryuinfo:
        self._nodeslink = {}            ##以列表结构存储各个拓扑节点的邻接信息
        self.nodegraph = None            ##定义一个NodeGraph对象（相应的类在GetAllPath.py文件中定义）
        self._allclassnodes = []          ##存储了实例化所有节点的图
-       self._webapiaddr = "192.168.26.130:8080"         ##ryu web访问地址及端口号
+       self._webapiaddr = "192.168.26.133:8080"         ##ryu web访问地址及端口号
        self.getlinkinfo(self._webapiaddr)              
        self.gethostsinfo(self._webapiaddr)
        self.getswitchesinfo(self._webapiaddr)   
@@ -113,13 +113,17 @@ class Ryuinfo:
             switchdpid = switch_to_hostinfo["dpid"]
             switchport = switch_to_hostinfo["port_no"]
             hostmac = singlehost["mac"] 
-            hostipv4 = singlehost["ipv4"]  
-            self._hostsnodes.append(hostmac)
-            self._nodeslink.setdefault(hostmac,[]).append(switchdpid)  ##主机host的邻接信息
-            self._nodeslink.setdefault(switchdpid,[]).append(hostmac)   ##将主机host添加到switches的邻接信息中
-            self._host_to_switchinfo[hostmac,switchdpid] = [hostipv4,switchport]
-            self._linkinfodict[hostmac,switchdpid] = [hostipv4,switchport]##后来修改加上的，可能有问题
-            self._linkinfodict[switchdpid,hostmac] = [switchport,hostipv4] ##边是有向边
+            list_hostipv4 = singlehost["ipv4"] 
+            hostipv4 = ""
+	    for val in list_hostipv4:
+                   hostipv4 = hostipv4+val
+	    #print hostipv4
+            self._hostsnodes.append(hostipv4)
+            self._nodeslink.setdefault(hostipv4,[]).append(switchdpid)  ##主机host的邻接信息
+            self._nodeslink.setdefault(switchdpid,[]).append(hostipv4)   ##将主机host添加到switches的邻接信息中
+            self._host_to_switchinfo[hostipv4,switchdpid] = [hostmac,switchport]
+            self._linkinfodict[hostipv4,switchdpid] = [hostmac,switchport]##后来修改加上的，可能有问题
+            self._linkinfodict[switchdpid,hostipv4] = [switchport,hostmac] ##边是有向边
             #print self._host_to_switchinfo[hostmac,switchdpid]
             #print self._nodeslink[hostmac]
            # print self._nodeslink[switchdpid]  

@@ -8,7 +8,7 @@ from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib import hub
 from ryu.lib.packet import packet
-
+import types
 SLEEP_PERIOD = 10
 
 
@@ -18,7 +18,7 @@ class Network_Monitor(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(Network_Monitor, self).__init__(*args, **kwargs)
-
+        
         self.datapaths = {}
         self.port_stats = {}
         self.port_speed = {}
@@ -27,7 +27,17 @@ class Network_Monitor(app_manager.RyuApp):
         # {"port":{dpid:{port:body,..},..},"flow":{dpid:body,..}
         self.stats = {}
         self.port_link = {}  # {dpid:{port_no:(config,state,cur),..},..}
+        self._linkinfodict = {}
+        self.linkcurrentcapacity = {}
+        
+        f1 = open("_linkinfodict.txt",'r')
+        str_linkinfodict = f1.read()
+        self._linkinfodict =eval(str_linkinfodict)
+        f1.close()
+        
         self.monitor_thread = hub.spawn(self._monitor)
+        
+        self.dbugfile = open("monitordebug.txt",'w')
 
     @set_ev_cls(ofp_event.EventOFPStateChange,
                 [MAIN_DISPATCHER, DEAD_DISPATCHER])
@@ -107,13 +117,14 @@ class Network_Monitor(app_manager.RyuApp):
                                                      flow.match.get('ipv4_dst'))):
                     print('%016x %8x %17s %8x %8d %8d %8.1f' % (
                         dpid,
-                        stat.match['in_port'], stat.match['ipv4_dst'],
+                        stat.match['in_port'], stat.match.get('ipv4_dst'),
                         stat.instructions[0].actions[0].port,
                         stat.packet_count, stat.byte_count,
                         abs(self.flow_speed[
                             (stat.match['in_port'],
-                            stat.match['ipv4_dst'],
+                            stat.match.get('ipv4_dst'),
                             stat.instructions[0].actions[0].port)][-1])))
+                    
             print '\n'
 
         if(type == 'port'):
@@ -129,6 +140,7 @@ class Network_Monitor(app_manager.RyuApp):
             for dpid in bodys.keys():
                 for stat in sorted(bodys[dpid], key=attrgetter('port_no')):
                     if stat.port_no != ofproto_v1_3.OFPP_LOCAL:
+			"""
                         print(format % (
                             dpid, stat.port_no,
                             stat.rx_packets, stat.rx_bytes, stat.rx_errors,
@@ -137,7 +149,30 @@ class Network_Monitor(app_manager.RyuApp):
                             self.port_link[dpid][stat.port_no][2],
                             self.port_link[dpid][stat.port_no][0],
                             self.port_link[dpid][stat.port_no][1]))
+			"""
+                        #type(stat.port_no)
+			#type(dpid)
+                        self.dbugfile.write(str(dpid)+"\n")
+			self.dbugfile.write(str(stat.port_no)+"\n")
+                        for key,val in self._linkinfodict.items():
+ 			    self.dbugfile.write("key: "+str(key[0])+","+str(key[1])+"val: "+str(val[0])+","+str(val[1])+"\n")
+			    dpid1 = '{:0>16x}'.format(dpid)
+                            port1 = '{:0>8x}'.format(stat.port_no)
+			    self.dbugfile.write(dpid1+"\n")
+			    self.dbugfile.write(port1+"\n")
+			    if(dpid1==key[0] or dpid1==key[1]):
+                                self.dbugfile.write("true\n")
+                            if dpid1 ==key[0] and val[0] == port1 or dpid1 ==key[1] and val[1] == port1:
+			        self.dbugfile.write("location if\n")
+                                self.linkcurrentcapacity[key[0],key[1]] = self.port_link[dpid][stat.port_no][2]
+                                self.linkcurrentcapacity[key[1],key[0]] = self.port_link[dpid][stat.port_no][2]
             print '\n'
+	    self.dbugfile.write("location 1\n")
+            f3=open("_Cap_links.txt","w")
+            for key,val in self.linkcurrentcapacity.items():          
+                 str3 = "Node_u"+"\t"+key[0]+"\t"+"-Node_v"+"\t"+key[1]+"\t"+"-Cap"+"\t"+str(val)+"\n"
+                 f3.write(str3)
+            f3.close()    
 
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
@@ -147,7 +182,7 @@ class Network_Monitor(app_manager.RyuApp):
                            key=lambda flow: (flow.match['in_port'],
                                              flow.match.get('ipv4_dst'))):
             key = (
-                stat.match['in_port'],  stat.match['ipv4_dst'],
+                stat.match['in_port'],  stat.match.get('ipv4_dst'),
                 stat.instructions[0].actions[0].port)
             value = (
                 stat.packet_count, stat.byte_count,
