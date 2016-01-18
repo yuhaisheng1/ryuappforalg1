@@ -438,8 +438,8 @@ class Shortest_Route(app_manager.RyuApp):
                     		path.insert(0, src_sw)
                     		self.logger.info(
                       			" PATH[%s --> %s]:%s\n" % (ip_src, ip_dst, path))
-		    	flow_info = (eth_type, ip_src, ip_dst, in_port)
-                    	self.install_flow(path, flow_info,1,1,msg.buffer_id, msg.data)
+		    		flow_info = (eth_type, ip_src, ip_dst, in_port)
+                    		self.install_flow(path, flow_info,1,1,msg.buffer_id, msg.data)
                 	else:
                     		# Reflesh the topology database.
                     		self.network_aware.get_topology(None)   
