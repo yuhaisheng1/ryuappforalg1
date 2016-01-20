@@ -70,7 +70,7 @@ class Network_Aware(app_manager.RyuApp):
                 self.createtopoinfofile()
                 is_firsttime = False
 		j = 0
-	    else:
+	    elif(not is_firsttime):
 		j = 0
             hub.sleep(SLEEP_PERIOD)
             i = i + 1
