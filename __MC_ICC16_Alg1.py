@@ -1,5 +1,6 @@
 #coding=utf-8
-    ##### 2015-09-13: Implement the Markov-Chain based approximated algorithm to solve MBSR problem.
+##### 2015-09-13: Implement the Markov-Chain based approximated algorithm to solve MBSR problem.
+##### 2016-01-20: Implement the thread-controlling alg1.(Huawei)
 import random
 import math
 import time
@@ -34,69 +35,48 @@ class MC_ICC16_Alg:
         self.list_MBoxDst_id  = [];        ## Middlebox-Connected-Switches. [10, 21, 33, 50]
         self.list_CFlowSrc_id = [];        ## Client-Flow-Src-switches.
  	
-      	
-	
-	#self.f1.flush()  
+	##==============================================================
     
         self.PathSet_selected = {}    ## {(Src_CFlow,Dst_MBox):[path1_id,path2_id,...,[path_|Ds|]_id]}, the In-Use path for all CFs.
         self.MBoxSet_assigned = {}    ## {(MBox_id):[CFlow1_id,CFlow2_id,...]}, the holding ClientFlows of each MiddleBox.
-        self.Timers = {}                ## {(Src):[ts_begin, timer_len, pathID_old, pathID_new, DstMBox_current,  DstMBox_new]}, the timer-set for each (Src)-CFlow. 
-         
-      
-    	#self.f1.write("1 \n")
-	#self.f1.flush()    
-              
-        self.T = 2;    ## The total running period of system.
-        self.STEP_TO_RUN = 0.01;            ## The length of time-slot, e.g., 0.001 second is the BEST step after testing.
-        self.STEP_TO_CHECK_TIMER = self.STEP_TO_RUN;    ## The step (length of interval) of check timer-expiration, e.g., 0.1 second.
-        self.Ds = 1;        ## Must larger than 1 and smaller than |Js|.
-        self.Beta = 5;    ## The parameter in the theoretical derivation.
-        self.Tau = 0;        ## The alpha regarding the Markov_Chain.
-    
-    	#self.f1.write("12 \n")
-	#self.f1.flush()      
-        self.Log_final_result = open('Log_Alg1_final_throughput.tr','w');
-        self.Log = open('Log_Alg1_Cost_STEP'+str(self.STEP_TO_RUN)+'.tr','w');
+        self.Timers = {}     ## {(Src):[ts_begin, timer_len, pathID_old, pathID_new, DstMBox_current,  DstMBox_new]}, the timer-set for each (Src)-CFlow. 
+	##==============================================================
+
         self.LogRun = open('Log_Alg1_running.txt','w')
-        self.Log_debug = open('Log_debugalg1.txt','w');  
+        #self.Log_final_result = open('Log_Alg1_final_throughput.tr','w');
+        #self.Log_debug = open('Log_debugalg1.txt','w');  
     
-        #self.f1.write("2 \n")
-	#self.f1.flush()    
-	running_time_in_total = 1200;	## 1200 seconds, this time can be changed.
-	step_to_check_timer_expiration = 0.01## unit of time is second.
-	thread.start_new_thread(self.Keep_running_alg1, (running_time_in_total, step_to_check_timer_expiration))	#### ---- begine to run alg1.######## End of __init__(self):~
+	##========================== !!! Critical Parameters Setting  !!! ====================================   
+	running_time_in_total = 600;	## 1200 seconds, this time can be changed.
+	step_to_check_timer_expiration = 0.01;## unit of time is second.
+	stepCount_to_print_throughput = 100;## unit: 100 steps of timer_checking.
+	thread.start_new_thread(self.Keep_running_alg1, (running_time_in_total, step_to_check_timer_expiration, stepCount_to_print_throughput))##End of __init__():~
 
 
-
-
- 
 #########################################################################################################################################
-    def Keep_running_alg1(self, Total_running_time, Step_to_check_timer ):   
+    def Keep_running_alg1(self, Total_running_time, Step_to_check_timer, StepCount_to_print_throughput ):   
         self.T = Total_running_time;    ## Alg-parameter: Set The total running period of alg1 as 1200 seconds. (This time can be changed.)
         self.STEP_TO_CHECK_TIMER = Step_to_check_timer;    ## Alg-parameter: The step (length of interval) of check timer-expiration, e.g., 0.1 second.
         self.Ds = 1;         ## Alg-parameter: Must be larger than 1 and smaller than |Js|.
         self.Beta = 5;    	 ## Alg-parameter: The parameter in the theoretical derivation.
         self.Tau = 0;        ## Alg-parameter: The alpha regarding the Markov_Chain.
-        
-    # ===================================== Begin to run =========================================
-    
+
+        self.Log = open('Log_Alg1_Cost_STEP'+str(self.STEP_TO_CHECK_TIMER)+'.tr','w');
+	# ===================================== Begin to run =========================================    
        
-    ## --- A. Read trace.
+    	## --- A. Read trace.
         self.FuncReadTrace(self.PathData_file, self.Traffic_file, self.Cap_links_file, self.Cap_MBoxes_file);
-      #print "\n"+"test11111111"
-	 
-    ## --- B.1 Stage 0: Initialization.
+
+	## --- B.1 Stage 0: Initialization.
         self.Initialization();
-      #print "\n"+"test22222222222222"
-	 
-        pass##self.LogRun.write(  '=====================End of Initialization==================\n' )
+	##self.LogRun.write(  '=====================End of Initialization==================\n' )
     
         _timeStamp_Begin_to_run = time.time();	## Return the current-timeStamp, unit-time is second.
 		
-    ### --- B.2 Stage 1: Initialize self.Timers for all pairs.
+	### --- B.2 Stage 1: Initialize self.Timers for all pairs.
         self.Set_timer_for_all_CFlows( _timeStamp_Begin_to_run );
     
-    ## --- C. Enter into time-slot Count-Down process.
+	## --- C. Enter into time-slot Count-Down process.
         current_ts = _timeStamp_Begin_to_run;	### Initialize the current_ts.
         step_times = 0;
         last_ts_to_check_timer = _timeStamp_Begin_to_run;
@@ -142,29 +122,26 @@ class MC_ICC16_Alg:
 				## !!! Record the times of RESET-Event(In each RESET-Event, a notification-event need to do).
 				Cumulative_Notification_times += 1;
 			
-			##### -- C.3 Check the current self.Timers.
-			# pass##self.LogRun.write( '\n======!!!!!====== At the end of TS [ %s ], all self.Timers:\n'%(current_ts) )
-			# for Src,val in self.Timers.items():
-				# pass##self.LogRun.write( '\t---- Src[ %d ] Ts_begin[ %s ] Len_timer[ %s ] DstMBox_old[ %s ] DstMBox_new[ %s ]\n'%(Src, val[0], val[1], val[4], val[5]) )
-				# pass##self.LogRun.write( '\n############################### End of TS [ %s ] ############################### :~\n'%(current_ts) )
-        
 			##### -- C.4 time flies, increase time-slot.
-			#current_ts += self.STEP_TO_RUN;## Simulation-style.
-			current_ts = time.time();		### Update the current_ts with now-time.
+			###current_ts += self.STEP_TO_RUN;## Simulation-style.
+			sleep_delay = Step_to_check_timer;
+			time.sleep( sleep_delay );
+			current_ts = time.time();### Update the current_ts with now-time. This is the real-time-experiment style.
 			step_times +=1;
         
 			##### -- C.5 record performance of system periodically.    
-			if ( step_times%10 == 0 ):
+			if ( 0 == step_times%StepCount_to_print_throughput ):
 				Throughput = self.Get_objVal_of_configurations_in_whole_system();
-				print '-ts\t%f\t-Throughput\t%s'%(current_ts, Throughput);
-			if ( step_times%1 == 0 ):
+				print '-TimeStamp\t%f\t-Throughput\t%s'%(current_ts, Throughput);
+			if ( 0 == step_times%StepCount_to_print_throughput ):
 				self.Call_and_record_system_performance(current_ts,step_times,Cumulative_Notification_times,Cumulative_TimerCountDown_times);
 		## ====== while :~
 	self.Write_down_the_current_solution_MBox_Path_assignment(current_ts);
 	self.Record_final_result(current_ts,step_times,Cumulative_Notification_times,Cumulative_TimerCountDown_times);
 	self.Log.close();
-	self.Log_final_result.close();
 	self.LogRun.close();
+	#self.Log_final_result.close();
+	#self.Log_debug.close();
 	##  ==== Finally, terminate this thread.
 	thread.exit_thread()### End of this function :~
 
@@ -420,8 +397,8 @@ class MC_ICC16_Alg:
                             idx_found = self.PathSet_cand[key][idx]
                             
                             #if (-1 == idx_found ):
-                            self.Log_debug.write("idx_found"+str(idx_found)+"\n" )
-                            self.Log_debug.write("\t----list_path_idxs"+str(list_path_idxs)+"\n" )
+                            #self.Log_debug.write("idx_found"+str(idx_found)+"\n" )
+                            #self.Log_debug.write("\t----list_path_idxs"+str(list_path_idxs)+"\n" )
                             
                             list_pathIDs_selected.append( idx_found );
                             
@@ -429,10 +406,10 @@ class MC_ICC16_Alg:
                         ## -- 1.2.2.2. initialize the self.PathSet_selected by the selected Ds paths.
                         Path_ID_newly_adopted = -1;
                         #self.Log_debug.write("\t----list_path_idxs"+str(list_path_idxs)+"\n" )
-                        self.Log_debug.write("list_pathIDs_selected"+" "+str(list_pathIDs_selected)+"\n")
+                        #self.Log_debug.write("list_pathIDs_selected"+" "+str(list_pathIDs_selected)+"\n")
                         #print "test 4"+"\n"
                         for path_id in list_pathIDs_selected:
-                            self.Log_debug.write( Src+"-------"+Dst+"\n")    
+                            #self.Log_debug.write( Src+"-------"+Dst+"\n")    
                             #self.f1.write("98 \n")                  
                             if (Src,Dst) not in self.PathSet_selected.keys():
                                 self.PathSet_selected[(Src,Dst)] = [];
@@ -442,12 +419,12 @@ class MC_ICC16_Alg:
                             ### ---- !!! Before adopting this new path, judge whether it is feasible to this (s,d).
                             #### ----!! Before using the new-path, check whether it is still feasible to this Src_CFlow.
                             #print "test begin2"
-                            self.Log_debug.write("Path_ID_newly_adopted"+" "+str(Path_ID_newly_adopted)+"\n")
+                            #self.Log_debug.write("Path_ID_newly_adopted"+" "+str(Path_ID_newly_adopted)+"\n")
 			    #self.f1.write("99 \n")
                             bool_whether_this_new_path_is_feasible = self.Check_whether_this_new_path_is_feasible_to_the_SrcCFlow(Src,Dst,Path_ID_newly_adopted);
                             #print "test end2"
 			    #self.f1.write("100 \n")
-                            self.Log_debug.write( "bool_whether_this_new_path_is_feasible"+" "+str(bool_whether_this_new_path_is_feasible)+"\n" ) 
+                            #self.Log_debug.write( "bool_whether_this_new_path_is_feasible"+" "+str(bool_whether_this_new_path_is_feasible)+"\n" ) 
                                                 
                             #print  self.PathSet_selected[(Src,Dst)]
                             print  "\n"
@@ -870,11 +847,11 @@ class MC_ICC16_Alg:
                 for idx_pathID in range(0, len(val)):
                     path_IU_sdi = val[idx_pathID];
                     
-                    self.Log_debug.write("\n\t ----- location 1 \n" )
+                    #self.Log_debug.write("\n\t ----- location 1 \n" )
                     
                     list_arcs_in_path_sdi = self.Get_all_arcs_in_a_specified_path( path_IU_sdi );
                     
-                    self.Log_debug.write("\n\t ----- location 2 \n" )
+                    #self.Log_debug.write("\n\t ----- location 2 \n" )
                     
                     if (u,v) in list_arcs_in_path_sdi:
                         summed_TR_in_uv += self.TDSet[s];    
@@ -882,7 +859,7 @@ class MC_ICC16_Alg:
 	    #self.f1.write("222222222\n")
             #print "self.Cap_links[(u,v)]"+" "+ str(self.arg.getcurrentcapacity(u,v))+"\n"
             
-            self.Log_debug.write( "summed_TR_in_uv"+" "+str(summed_TR_in_uv)+"\n" )
+            #self.Log_debug.write( "summed_TR_in_uv"+" "+str(summed_TR_in_uv)+"\n" )
             #self.f1.write("self.arg.getcurrentcapacity ok \n")
 	    #self.f1.write(str(u)+"\n")
 	    #self.f1.write(str(v)+"\n")
