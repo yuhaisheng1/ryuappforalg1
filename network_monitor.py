@@ -30,8 +30,8 @@ class Network_Monitor(app_manager.RyuApp):
         self.port_link = {}  # {dpid:{port_no:(config,state,cur),..},..}
         self._linkinfodict = {}
         self.linkcurrentcapacity = {}
-        
-        
+        self.myflow_stats = {}
+        self.myflow_speed = {}
         self.monitor_thread = hub.spawn(self._monitor)
 	#th1 = threading.Thread(target = self._monitor) 
 	#th1.start() 
@@ -65,6 +65,12 @@ class Network_Monitor(app_manager.RyuApp):
 	    self.dbugfile1.flush()
 	    if self.stats['flow'] or self.stats['port']:
 		#self.dbugfile1.write("self.stats['flow'] and self.stats['port'] is not null \n")
+		#self.dbugfile1.write("self.stats['flow']"+str(self.stats['flow'])+"\n")
+		#self.dbugfile1.flush()		
+		#self.dbugfile1.write("flowspeed"+str(self.flow_speed)+"\n")
+		#self.dbugfile1.flush()
+		self.dbugfile1.write("myflowspeed"+str(self.myflow_speed)+"\n")
+		self.dbugfile1.flush()
                 self.show_stat('flow', self.stats['flow'])
                 self.show_stat('port', self.stats['port'])		
 		hub.sleep(1)
@@ -163,12 +169,7 @@ class Network_Monitor(app_manager.RyuApp):
                             self.port_link[dpid][stat.port_no][1]))
 		    
                         
-    def getcurrentcapacity(self,u,v):
-	
-	
-	
-
-	
+    def getcurrentcapacity(self,u,v):		
 	f1 = open("_linkinfodict.txt",'r')
         str_linkinfodict = f1.read()
         self._linkinfodict =eval(str_linkinfodict)
@@ -203,6 +204,28 @@ class Network_Monitor(app_manager.RyuApp):
 	return float(currentcapacity)
 		
     
+    def getflowspeed(self,mydpid,myipsrc,myipdst, inport,outport,priority):
+	mydpid = int(mydpid)
+	inport = int(inport)
+	outport = int(outport)
+	priority = int(priority)
+        for dpid in self.stats['flow'].keys():
+	    if dpid == mydpid:
+           	 for stat in sorted([flow for flow in self.stats['flow'][dpid]
+                                if flow.priority == priority],
+                                key=lambda flow: (flow.match['in_port'],
+					   flow.match.get('ipv4_src'),
+					   flow.match.get('ipv4_dst'))):
+                        
+			if(stat.match['in_port']==inport and stat.match.get('ipv4_src') ==myipsrc and stat.match.get('ipv4_dst') == myipdst 
+	                	and stat.instructions[0].actions[0].port ==outport):
+                    
+                   	       return  abs(self.myflow_speed[(stat.match['in_port'],stat.match.get('ipv4_src'),stat.match.get('ipv4_dst'),stat.instructions[0].actions[0].port)][-1])   	
+                    
+           
+
+
+    	
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
@@ -217,7 +240,6 @@ class Network_Monitor(app_manager.RyuApp):
                 stat.packet_count, stat.byte_count,
                 stat.duration_sec, stat.duration_nsec)
             self._save_stats(self.flow_stats, key, value, 5)
-
             # Get flow's speed.
             pre = 0
             period = SLEEP_PERIOD
@@ -229,9 +251,42 @@ class Network_Monitor(app_manager.RyuApp):
                     tmp[-2][2], tmp[-2][3])
 
             speed = self._get_speed(
+
                 self.flow_stats[key][-1][1], pre, period)
 
             self._save_stats(self.flow_speed, key, speed, 5)
+##############################################################################################################################################
+	
+	for mystat in sorted([flow for flow in body if flow.priority == 10],
+                           key=lambda flow: (flow.match['in_port'],
+					     flow.match.get('ipv4_src'),
+                                             flow.match.get('ipv4_dst'))):
+            mykey = (
+                mystat.match['in_port'], mystat.match.get('ipv4_src'),  mystat.match.get('ipv4_dst'),
+                mystat.instructions[0].actions[0].port)
+            myvalue = (
+                mystat.packet_count, mystat.byte_count,
+                mystat.duration_sec, mystat.duration_nsec)
+            self._save_stats(self.myflow_stats, mykey, myvalue, 5)
+
+	    mypre = 0
+            myperiod = SLEEP_PERIOD
+            mytmp = self.myflow_stats[mykey]
+            if len(tmp) > 1:
+                  mypre = mytmp[-2][1]
+                  myperiod = self._get_period(
+                       mytmp[-1][2], mytmp[-1][3],
+                       mytmp[-2][2], mytmp[-2][3])
+
+            myspeed = self._get_speed(
+                    self.myflow_stats[key][-1][1], mypre, myperiod)
+
+            self._save_stats(self.myflow_speed, mykey, myspeed, 5)
+
+	
+
+###############################################################################################################################################
+
 
     @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
     def _port_stats_reply_handler(self, ev):
