@@ -64,15 +64,19 @@ class Network_Monitor(app_manager.RyuApp):
 	    self.dbugfile1.write("hub sleep 10s end\n")
 	    self.dbugfile1.flush()
 	    if self.stats['flow'] or self.stats['port']:
-		#self.dbugfile1.write("self.stats['flow'] and self.stats['port'] is not null \n")
+		self.dbugfile1.write("self.stats['flow'] and self.stats['port'] is not null \n")
 		#self.dbugfile1.write("self.stats['flow']"+str(self.stats['flow'])+"\n")
 		#self.dbugfile1.flush()		
-		#self.dbugfile1.write("flowspeed"+str(self.flow_speed)+"\n")
-		#self.dbugfile1.flush()
+		self.dbugfile1.write("flowspeed"+str(self.flow_speed)+"\n")
+		self.dbugfile1.flush()
 		self.dbugfile1.write("myflowspeed"+str(self.myflow_speed)+"\n")
 		self.dbugfile1.flush()
                 self.show_stat('flow', self.stats['flow'])
-                self.show_stat('port', self.stats['port'])		
+		self.dbugfile1.write("flow stat is show\n")
+		self.dbugfile1.flush()	
+                self.show_stat('port', self.stats['port'])
+		self.dbugfile1.write("port stat is show\n")
+		self.dbugfile1.flush()		
 		hub.sleep(1)
 	    else:
 		self.dbugfile1.write("self.stats['flow'] and self.stats['port'] is  null \n")
@@ -129,19 +133,24 @@ class Network_Monitor(app_manager.RyuApp):
                 for stat in sorted([flow for flow in bodys[dpid]
                                     if flow.priority == 1],
                                    key=lambda flow: (flow.match['in_port'],
+						     flow.match.get('ipv4_src'),
                                                      flow.match.get('ipv4_dst'))):
+		    self.dbugfile1.write("location 6\n")
+		    self.dbugfile1.flush()	
                     print('%016x %8x %17s %8x %8d %8d %8.1f' % (
                         dpid,
                         stat.match['in_port'], stat.match.get('ipv4_dst'),
                         stat.instructions[0].actions[0].port,
                         stat.packet_count, stat.byte_count,
-                        abs(self.flow_speed[
+                        abs(self.flow_speed[dpid][
                             (stat.match['in_port'],
+			     stat.match.get('ipv4_src'),
                             stat.match.get('ipv4_dst'),
                             stat.instructions[0].actions[0].port)][-1])))
                     
             print '\n'
-
+	    self.dbugfile1.write("flow stat han shu is end\n")
+	    self.dbugfile1.flush()	
         if(type == 'port'):
             print('datapath             port   ''rx-pkts  rx-bytes rx-error '
                   'tx-pkts  tx-bytes tx-error  port-speed(B/s)'
@@ -169,7 +178,7 @@ class Network_Monitor(app_manager.RyuApp):
                             self.port_link[dpid][stat.port_no][1]))
 		    
                         
-    def getcurrentcapacity(self,u,v):		
+    def get_used_bw(self,u,v):		
 	f1 = open("_linkinfodict.txt",'r')
         str_linkinfodict = f1.read()
         self._linkinfodict =eval(str_linkinfodict)
@@ -181,6 +190,7 @@ class Network_Monitor(app_manager.RyuApp):
 		if(u==key[0] and v==key[1]):
 					
 			port = self._linkinfodict[(u,v)][0]
+	port = int(port)
 			
 	
 	truedpid = 0
@@ -194,84 +204,146 @@ class Network_Monitor(app_manager.RyuApp):
 	       truedpid = int(v)
 	
 	
+	
+	"""
 	port = int(port)
+	totalusedbw = float(0)
+	if truedpid in self.flow_speed.keys():
+		
+		for val in self.flow_speed[truedpid]:
+			keylist=list(val.keys())
+			if port == keylist[2]:
+				valuelist = list(val.values())
+				totalusedbw = totalusedbw + abs(valuelist[-1])                            
+		
 	
-	if truedpid in self.port_link.keys():
-		
-		currentcapacity = self.port_link[truedpid][port][2] 
-		
-	
-	return float(currentcapacity)
-		
+	return float(totalusedbw)
+	"""
+	return abs(self.port_speed[(truedpid, port)][-1])
+
+    def caltotalthroughput(self,pathselected,pathset):   ##pathselected/pathset are  the pathselected/pathset of alg1
+	f2 = open("_linkinfodict.txt",'r')
+        str_linkinfodict = f2.read()
+        self._linkinfodict =eval(str_linkinfodict)
+	caltotalthroughput = float(0)
+	for key in pathselected.keys():
+		path_list = []
+		path_list = pathset[int(pathselected[key][0])] 		
+                   
+		i = 0
+		maxflowrate = float(0)
+		while(i<len(path)-1):
+				inport = int(self._linkinfodict[path[i],path[i+1]][1])
+				outport = int(self._linkinfodict[path[i+1],path[i+2]][0])
+				if (inport,key[0],key[1],outport) in self.myflow_speed.keys():		
+					flowrate = abs(self.myflow_speed[int(path[i+1])][(inport,key[0],key[1],outport)][-1]) 
+					if(flowrate > maxflowrate):
+							maxflowrate = flowrate
+
+		caltotalthroughput = caltotalthroughput + maxflowrate
+	return caltotalthroughput
+
+
+
+
+
+
     
-    def getflowspeed(self,mydpid,myipsrc,myipdst, inport,outport,priority):
-	mydpid = int(mydpid)
-	inport = int(inport)
-	outport = int(outport)
-	priority = int(priority)
-        for dpid in self.stats['flow'].keys():
-	    if dpid == mydpid:
-           	 for stat in sorted([flow for flow in self.stats['flow'][dpid]
-                                if flow.priority == priority],
-                                key=lambda flow: (flow.match['in_port'],
-					   flow.match.get('ipv4_src'),
-					   flow.match.get('ipv4_dst'))):
-                        
-			if(stat.match['in_port']==inport and stat.match.get('ipv4_src') ==myipsrc and stat.match.get('ipv4_dst') == myipdst 
-	                	and stat.instructions[0].actions[0].port ==outport):
-                    
-                   	       return  abs(self.myflow_speed[(stat.match['in_port'],stat.match.get('ipv4_src'),stat.match.get('ipv4_dst'),stat.instructions[0].actions[0].port)][-1])   	
-                    
-           
-
-
-    	
     @set_ev_cls(ofp_event.EventOFPFlowStatsReply, MAIN_DISPATCHER)
     def _flow_stats_reply_handler(self, ev):
         body = ev.msg.body
-        self.stats['flow'][ev.msg.datapath.id] = body
-        for stat in sorted([flow for flow in body if flow.priority == 1],
+        #self.stats['flow'][ev.msg.datapath.id] = body
+	dpid = ev.msg.datapath.id
+        self.stats['flow'][dpid] = body
+        self.flow_stats.setdefault(dpid, {})
+        self.flow_speed.setdefault(dpid, {})
+	self.dbugfile1.write("body  "+str(body)+"\n")
+        self.dbugfile1.flush()
+	    
+        for stat in sorted(
+			   [flow for flow in body if flow.priority == 1 or  flow.priority == 10 ],
                            key=lambda flow: (flow.match['in_port'],
+					     flow.match.get('ipv4_src'),
                                              flow.match.get('ipv4_dst'))):
-            key = (
-                stat.match['in_port'],  stat.match.get('ipv4_dst'),
-                stat.instructions[0].actions[0].port)
-            value = (
-                stat.packet_count, stat.byte_count,
-                stat.duration_sec, stat.duration_nsec)
-            self._save_stats(self.flow_stats, key, value, 5)
+	    self.dbugfile1.write("stat:"+str(stat)+"\n")
+	    self.dbugfile1.flush()
+	    
+            key = (stat.match['in_port'],stat.match.get('ipv4_src'),stat.match.get('ipv4_dst'),
+                   stat.instructions[0].actions[0].port)
+            value = (stat.packet_count, stat.byte_count,
+                    stat.duration_sec, stat.duration_nsec)
+            self._save_stats(self.flow_stats[dpid], key, value, 5)
             # Get flow's speed.
             pre = 0
             period = SLEEP_PERIOD
-            tmp = self.flow_stats[key]
+            tmp = self.flow_stats[dpid][key]
             if len(tmp) > 1:
                 pre = tmp[-2][1]
-                period = self._get_period(
-                    tmp[-1][2], tmp[-1][3],
-                    tmp[-2][2], tmp[-2][3])
-
+                period = self._get_period(tmp[-1][2], tmp[-1][3],
+                                         tmp[-2][2], tmp[-2][3])
             speed = self._get_speed(
 
-                self.flow_stats[key][-1][1], pre, period)
+                self.flow_stats[dpid][key][-1][1], pre, period)
 
-            self._save_stats(self.flow_speed, key, speed, 5)
+            self._save_stats(self.flow_speed[dpid], key, speed, 5)
+	self.dbugfile1.write("PFlowStatsReply not end\n")
+        self.dbugfile1.flush()	
 ##############################################################################################################################################
 	
 	for mystat in sorted([flow for flow in body if flow.priority == 10],
                            key=lambda flow: (flow.match['in_port'],
 					     flow.match.get('ipv4_src'),
                                              flow.match.get('ipv4_dst'))):
+ 	    self.dbugfile1.write("location 1\n")
+            self.dbugfile1.flush()
             mykey = (
                 mystat.match['in_port'], mystat.match.get('ipv4_src'),  mystat.match.get('ipv4_dst'),
+                mystat.instructions[0].actions[0].port)
+	    self.dbugfile1.write("locaton 2\n")
+            self.dbugfile1.flush()
+            myvalue = (
+                mystat.packet_count, mystat.byte_count,
+                mystat.duration_sec, mystat.duration_nsec)
+	    self.dbugfile1.write("location 3\n")
+            self.dbugfile1.flush()
+            self._save_stats(self.myflow_stats[dpid], mykey, myvalue, 5)
+	    self.dbugfile1.write("location 4 \n")
+            self.dbugfile1.flush()
+	    mypre = 0
+            myperiod = SLEEP_PERIOD
+            mytmp = self.myflow_stats[dpid][mykey]
+            if len(tmp) > 1:
+                  mypre = mytmp[-2][1]
+                  myperiod = self._get_period(
+                       mytmp[-1][2], mytmp[-1][3],
+                       mytmp[-2][2], mytmp[-2][3])
+	    self.dbugfile1.write("location 5\n")
+            self.dbugfile1.flush()
+            myspeed = self._get_speed(
+                    self.myflow_stats[key][-1][1], mypre, myperiod)
+	    self.dbugfile1.write("location 5\n")
+            self.dbugfile1.flush()
+            self._save_stats(self.myflow_speed[dpid], mykey, myspeed, 5)
+	self.dbugfile1.write("PFlowStatsReply end\n")
+        self.dbugfile1.flush()	   
+###############################################################################################################################################
+####test self.myflowspeed
+	"""
+	for mystat in sorted([flow for flow in body if flow.priority == 1],
+                           key=lambda flow: (flow.match['in_port'],
+					     
+                                             flow.match.get('ipv4_dst'))):
+            mykey = (
+                mystat.match.get['in_port'],  mystat.match.get('ipv4_dst'),
                 mystat.instructions[0].actions[0].port)
             myvalue = (
                 mystat.packet_count, mystat.byte_count,
                 mystat.duration_sec, mystat.duration_nsec)
-            self._save_stats(self.myflow_stats, mykey, myvalue, 5)
+            self._save_stats(self.myflow_stats[dpid], mykey, myvalue, 5)
 
 	    mypre = 0
             myperiod = SLEEP_PERIOD
-            mytmp = self.myflow_stats[mykey]
+            mytmp = self.myflow_stats[dpid][mykey]
             if len(tmp) > 1:
                   mypre = mytmp[-2][1]
                   myperiod = self._get_period(
@@ -279,12 +351,10 @@ class Network_Monitor(app_manager.RyuApp):
                        mytmp[-2][2], mytmp[-2][3])
 
             myspeed = self._get_speed(
-                    self.myflow_stats[key][-1][1], mypre, myperiod)
+                    self.myflow_stats[dpid][key][-1][1], mypre, myperiod)
 
-            self._save_stats(self.myflow_speed, mykey, myspeed, 5)
-
-	
-
+            self._save_stats(self.myflow_speed[dpid], mykey, myspeed, 5)	
+	    """
 ###############################################################################################################################################
 
 
@@ -296,10 +366,8 @@ class Network_Monitor(app_manager.RyuApp):
         for stat in sorted(body, key=attrgetter('port_no')):
             if stat.port_no != ofproto_v1_3.OFPP_LOCAL:
                 key = (ev.msg.datapath.id, stat.port_no)
-                value = (
-                    stat.tx_bytes, stat.rx_bytes, stat.rx_errors,
-                    stat.duration_sec, stat.duration_nsec)
-
+                value = (stat.tx_bytes, stat.rx_bytes, stat.rx_errors,
+                         stat.duration_sec, stat.duration_nsec)
                 self._save_stats(self.port_stats, key, value, 5)
 
                 # Get port speed.
@@ -308,10 +376,8 @@ class Network_Monitor(app_manager.RyuApp):
                 tmp = self.port_stats[key]
                 if len(tmp) > 1:
                     pre = tmp[-2][0] + tmp[-2][1]
-                    period = self._get_period(
-                        tmp[-1][3], tmp[-1][4],
-                        tmp[-2][3], tmp[-2][4])
-
+                    period = self._get_period(tmp[-1][3], tmp[-1][4],
+                                             tmp[-2][3], tmp[-2][4])
                 speed = self._get_speed(
                     self.port_stats[key][-1][0] + self.port_stats[key][-1][1],
                     pre, period)
