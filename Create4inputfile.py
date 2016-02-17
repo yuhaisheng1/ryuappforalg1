@@ -2,7 +2,7 @@
 '''
 Created on 2015-12-20
 
-@author: Guo Zhiqiang
+@author: Guo Zhiqiang, Haisheng Yu
 '''
 
 
