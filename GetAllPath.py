@@ -2,7 +2,7 @@
 '''
 Created on 2015-12-21
 
-@author: Guo Zhiqiang
+@author: Guo Zhiqiang, Haisheng Yu
 '''
 
 class NodeGraph ():
