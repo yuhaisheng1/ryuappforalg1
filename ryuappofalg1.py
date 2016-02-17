@@ -1,4 +1,7 @@
 # conding=utf-8
+
+@Author: Zhiqaing Guo, Haisheng Yu
+
 import logging
 import struct
 from operator import attrgetter
